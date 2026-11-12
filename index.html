@@ -1,0 +1,127 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Smart Library Occupancy Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--tx:#1b1f27;--mu:#667085;--bd:#e3e6ec;--ac:#2563eb;--wr:#d97706;--bad:#dc2626;--ok:#16a34a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12151b;--card:#1c2029;--tx:#e8eaef;--mu:#9aa3b2;--bd:#2c3240;--ac:#60a5fa}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,Segoe UI,Roboto,sans-serif;padding:16px;max-width:1100px;margin:auto}
+h1{font-size:22px;margin:0}h2{font-size:14px;margin:0 0 8px}.sub{color:var(--mu);font-size:13px;margin:4px 0 12px}
+.badge{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:600}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+select,input,button{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
+button{cursor:pointer;background:var(--ac);color:#fff;border:0}button.s{background:var(--card);color:var(--tx);border:1px solid var(--bd)}
+.g{display:grid;gap:12px}.k{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}.c{grid-template-columns:repeat(auto-fit,minmax(320px,1fr));margin-top:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}
+.kv{font-size:32px;font-weight:700}.kl{color:var(--mu);font-size:13px}.h{height:240px;position:relative}
+#find{border-left:4px solid var(--wr);margin-top:12px}#log{font-size:12px;color:var(--mu);margin-top:8px;max-height:90px;overflow:auto}
+</style></head><body>
+<h1>📚 Smart Library Occupancy Dashboard</h1>
+<div class="sub"><span class="badge">SIMULATED DATA</span> &nbsp;Last updated: <b id="lu">—</b> &nbsp;|&nbsp; Rows: <span id="rc"></span> &nbsp;|&nbsp; Rejected: <span id="rj">0</span></div>
+<div class="bar">
+<label>Section: <select id="sec"></select></label>
+<button id="add">➕ Add new hourly data</button>
+<button id="rush" class="s">🚨 Simulate exam rush</button>
+<button id="auto" class="s">▶ Auto-update: off</button>
+</div>
+<div class="bar">
+<span class="kl">Manual record:</span><select id="ms"></select><input id="mo" type="number" placeholder="Occupied (blank = missing)" style="width:210px"><button id="madd" class="s">Add record</button>
+</div>
+<div class="g k">
+<div class="card"><div class="kl">Available seats (latest)</div><div class="kv" id="k1">—</div></div>
+<div class="card"><div class="kl">Occupancy % (latest)</div><div class="kv" id="k2">—</div></div>
+<div class="card"><div class="kl">Busiest hour (avg occupancy)</div><div class="kv" id="k3">—</div></div>
+</div>
+<div class="g c">
+<div class="card"><h2>Occupancy (%) over time</h2><div class="h"><canvas id="c1"></canvas></div></div>
+<div class="card"><h2>Latest occupancy (%) by section</h2><div class="h"><canvas id="c2"></canvas></div></div>
+<div class="card"><h2>Hour of day vs occupancy (%)</h2><div class="h"><canvas id="c3"></canvas></div></div>
+</div>
+<div class="card" id="find"><h2>Actionable finding</h2><div id="ft"></div></div>
+<div id="log"></div>
+<script>
+const RAW=`Timestamp,Library Section,Total Seats,Occupied Seats
+2026-11-12 08:00,Reading Hall,200,46
+2026-11-12 08:00,Digital Lab,80,15
+2026-11-12 08:00,Silent Zone,120,34
+2026-11-12 08:00,Group Study,60,9
+2026-11-12 09:00,Reading Hall,200,81
+2026-11-12 09:00,Digital Lab,80,28
+2026-11-12 09:00,Silent Zone,120,44
+2026-11-12 09:00,Group Study,60,19
+2026-11-12 10:00,Reading Hall,200,109
+2026-11-12 10:00,Digital Lab,80,43
+2026-11-12 10:00,Silent Zone,120,69
+2026-11-12 10:00,Group Study,60,26
+2026-11-12 11:00,Reading Hall,200,148
+2026-11-12 11:00,Digital Lab,80,57
+2026-11-12 11:00,Silent Zone,120,89
+2026-11-12 11:00,Group Study,60,34
+2026-11-12 12:00,Reading Hall,200,163
+2026-11-12 12:00,Digital Lab,80,62
+2026-11-12 12:00,Silent Zone,120,102
+2026-11-12 12:00,Group Study,60,38
+2026-11-12 13:00,Reading Hall,200,151
+2026-11-12 13:00,Digital Lab,80,46
+2026-11-12 13:00,Silent Zone,120,93
+2026-11-12 13:00,Group Study,60,32
+2026-11-12 14:00,Reading Hall,200,161
+2026-11-12 14:00,Digital Lab,80,58
+2026-11-12 14:00,Silent Zone,120,104
+2026-11-12 14:00,Group Study,60,43
+2026-11-12 15:00,Reading Hall,200,172
+2026-11-12 15:00,Digital Lab,80,66
+2026-11-12 15:00,Silent Zone,120,115
+2026-11-12 15:00,Group Study,60,42`;
+const SEC={"Reading Hall":200,"Digital Lab":80,"Silent Zone":120,"Group Study":60};
+let rows=[],rej=0;
+const $=i=>document.getElementById(i);
+const log=m=>{$("log").insertAdjacentHTML("afterbegin","• "+m+"<br>")};
+function add(ts,s,t,o,src){
+ const d=new Date(ts.replace(" ","T"));
+ if(isNaN(d)){rej++;log("Rejected ("+src+"): bad timestamp");return false}
+ if(!(s in SEC)){rej++;log("Rejected: unknown section "+s);return false}
+ if(o===""||o===null||isNaN(+o)){rej++;log("Rejected: missing occupied value for "+s+" at "+ts);return false}
+ t=+t;o=+o;
+ if(o<0||o>t){rej++;log("Rejected: unusual reading "+o+"/"+t+" for "+s+" at "+ts);return false}
+ if(rows.some(r=>r.ts===ts&&r.s===s)){rej++;log("Rejected: duplicate "+s+" "+ts);return false}
+ rows.push({ts,s,t,o,h:d.getHours(),p:o/t*100});return true}
+RAW.trim().split("\n").slice(1).forEach(l=>{const[a,b,c,d]=l.split(",");add(a,b,c,d,"csv")});
+Object.keys(SEC).forEach(s=>{$("sec").add(new Option(s,s));$("ms").add(new Option(s,s))});
+$("sec").insertAdjacentHTML("afterbegin",'<option value="All">All sections</option>');$("sec").value="All";
+const txt=getComputedStyle(document.documentElement).getPropertyValue("--mu");
+const opt=(x,y)=>({responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:x}},y:{min:0,max:100,title:{display:true,text:y}}},plugins:{legend:{display:false}}});
+const c1=new Chart($("c1"),{type:"line",data:{labels:[],datasets:[{label:"Occupancy %",data:[],borderColor:"#2563eb",tension:.3,fill:false}]},options:opt("Time","Occupancy (%)")});
+const c2=new Chart($("c2"),{type:"bar",data:{labels:[],datasets:[{data:[],backgroundColor:[]}]},options:opt("Section","Occupancy (%)")});
+const c3=new Chart($("c3"),{type:"scatter",data:{datasets:[{label:"Reading",data:[],backgroundColor:"#7c3aed"}]},options:opt("Hour of day (24h)","Occupancy (%)")});
+c3.options.scales.x.min=7;c3.options.scales.x.max=20;
+function render(stamp){
+ const f=$("sec").value,R=rows.filter(r=>f==="All"||r.s===f);
+ const tsList=[...new Set(R.map(r=>r.ts))].sort(),last=tsList[tsList.length-1];
+ const L=R.filter(r=>r.ts===last),T=L.reduce((a,r)=>a+r.t,0),O=L.reduce((a,r)=>a+r.o,0);
+ $("k1").textContent=(T-O)+" / "+T;$("k2").textContent=(O/T*100).toFixed(1)+"%";
+ $("k2").style.color=O/T>.85?"var(--bad)":O/T>.7?"var(--wr)":"var(--ok)";
+ const byH={};R.forEach(r=>{(byH[r.h]=byH[r.h]||[]).push(r.p)});
+ let bh=null,bv=0;for(const h in byH){const a=byH[h].reduce((x,y)=>x+y)/byH[h].length;if(a>bv){bv=a;bh=h}}
+ $("k3").textContent=String(bh).padStart(2,"0")+":00 ("+bv.toFixed(0)+"%)";
+ c1.data.labels=tsList.map(t=>t.slice(11));
+ c1.data.datasets[0].data=tsList.map(t=>{const x=R.filter(r=>r.ts===t);return +(x.reduce((a,r)=>a+r.o,0)/x.reduce((a,r)=>a+r.t,0)*100).toFixed(1)});
+ const all=rows,lastAll=[...new Set(all.map(r=>r.ts))].sort().pop(),S=all.filter(r=>r.ts===lastAll);
+ c2.data.labels=S.map(r=>r.s);c2.data.datasets[0].data=S.map(r=>+r.p.toFixed(1));
+ c2.data.datasets[0].backgroundColor=S.map(r=>r.p>85?"#dc2626":r.p>70?"#d97706":"#16a34a");
+ c3.data.datasets[0].data=R.map(r=>({x:r.h,y:+r.p.toFixed(1)}));
+ [c1,c2,c3].forEach(c=>c.update());
+ const hh={};rows.forEach(r=>{(hh[r.h]=hh[r.h]||{o:0,t:0}).o+=r.o;hh[r.h].t+=r.t});
+ let ph=0,pp=0;for(const h in hh){const p=hh[h].o/hh[h].t*100;if(p>pp){pp=p;ph=h}}
+ const hot=S.filter(r=>r.p>85).map(r=>r.s+" ("+r.p.toFixed(0)+"%)");
+ $("ft").innerHTML="Library-wide occupancy peaks at <b>"+String(ph).padStart(2,"0")+":00 ("+pp.toFixed(0)+"%)</b>. "+(hot.length?"At the latest reading, <b>"+hot.join(", ")+"</b> exceed 85% — open overflow seating and alert students to use less-crowded sections.":"No section is above 85% at the latest reading ("+lastAll+"), but consider opening overflow seating around "+String(ph).padStart(2,"0")+":00 and promoting low-occupancy sections to students.");
+ $("rc").textContent=rows.length;$("rj").textContent=rej;
+ if(stamp)$("lu").textContent=new Date().toLocaleString()}
+function nextTs(){const l=[...new Set(rows.map(r=>r.ts))].sort().pop(),h=+l.slice(11,13)+1;return l.slice(0,11)+String(h).padStart(2,"0")+":00"}
+function gen(rush){const ts=nextTs(),prev=rows.filter(r=>r.ts===rows.map(x=>x.ts).sort().pop());
+ prev.forEach(r=>{let p=r.p/100+(Math.random()-.5)*.12;if(rush)p+=.25;p=Math.max(.1,Math.min(rush?1.05:.97,p));add(ts,r.s,r.t,Math.round(SEC[r.s]*p),"live")});
+ if(rush)log("Exam rush simulated at "+ts+" (sudden demand spike; one reading may exceed capacity and gets rejected).");render(true)}
+$("add").onclick=()=>gen(false);$("rush").onclick=()=>gen(true);$("sec").onchange=()=>render(false);
+$("madd").onclick=()=>{const s=$("ms").value;add(nextTs(),s,SEC[s],$("mo").value,"manual");render(true)};
+let iv=null;$("auto").onclick=()=>{if(iv){clearInterval(iv);iv=null;$("auto").textContent="▶ Auto-update: off"}else{iv=setInterval(()=>gen(false),4000);$("auto").textContent="⏸ Auto-update: on"}};
+render(true);
+</script></body></html>
